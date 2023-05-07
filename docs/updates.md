@@ -1,3 +1,17 @@
+## 3.5.8
+- fix: 删除权限 ACCESS_NETWORK_STATE, 解决个别机型重复申请问题
+- upgrade: BRV 1.4.0
+
+## 3.5.7
+- fix: #165 泛型擦除
+
+## 3.5.6
+- feat: 新增 BaseRequest.execute 非内联函数重载
+- feat: Net.kt支持Java静态调用
+- refactor: LogRecordInterceptor @JvmOverloads
+- fix: Interval.onlyResumed 结束轮询
+- pref: 删除转换器获取的反射调用
+
 ## 3.5.5
 - fix: #157 日志拦截器失效
 
