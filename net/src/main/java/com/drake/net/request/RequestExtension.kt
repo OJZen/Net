@@ -1,17 +1,25 @@
 /*
- * Copyright (C) 2018 Drake, Inc.
+ * MIT License
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Copyright (c) 2023 劉強東 https://github.com/liangjingkanji
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 package com.drake.net.request
@@ -20,6 +28,7 @@ import com.drake.net.NetConfig
 import com.drake.net.convert.NetConverter
 import com.drake.net.interfaces.ProgressListener
 import com.drake.net.tag.NetTag
+import kotlinx.coroutines.CoroutineExceptionHandler
 import okhttp3.OkHttpUtils
 import okhttp3.Request
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -27,28 +36,33 @@ import kotlin.reflect.KType
 
 //<editor-fold desc="ID">
 /**
- * 请求的Id
+ * 请求Id
+ * Group和Id在使用场景上有所区别, 预期上Group允许重复赋值给多个请求, Id仅允许赋值给一个请求, 但实际上都允许重复赋值
+ * 在作用域中发起请求时会默认使用协程错误处理器作为Group: `setGroup(coroutineContext[CoroutineExceptionHandler])`
+ * 如果你覆盖Group会导致协程结束不会自动取消请求
  */
 var Request.id: Any?
-    get() = tagOf<NetTag.RequestId>()
+    get() = tagOf<NetTag.RequestId>()?.value
     set(value) {
         tagOf(value?.let { NetTag.RequestId(it) })
     }
 
 /**
- * 请求的分组名
- * Group和Id本质上都是任意对象Any. 但是Net网络请求中自动取消的操作都是通过Group分组. 如果你覆盖可能会导致自动取消无效
- * 在设计理念上分组可以重复. Id不行
+ * 请求分组
+ * Group和Id在使用场景上有所区别, 预期上Group允许重复赋值给多个请求, Id仅允许赋值给一个请求, 但实际上都允许重复赋值
+ * 在作用域中发起请求时会默认使用协程错误处理器作为Group: `setGroup(coroutineContext[CoroutineExceptionHandler])`
+ * 如果你覆盖Group会导致协程结束不会自动取消请求
  */
 var Request.group: Any?
-    get() = tagOf<NetTag.RequestGroup>()
+    get() = tagOf<NetTag.RequestGroup>()?.value
     set(value) {
         tagOf(value?.let { NetTag.RequestGroup(it) })
     }
 //</editor-fold>
 
 /**
- * KType属于Kotlin特有的Type, 某些kotlin独占框架可能会使用到. 例如 kotlin.serialization
+ * 为请求附着KType信息
+ * KType属于Kotlin特有的Type, 某些Kotlin框架可能会使用到, 例如 kotlin.serialization
  */
 var Request.kType: KType?
     get() = tagOf<NetTag.RequestKType>()?.value
@@ -59,15 +73,14 @@ var Request.kType: KType?
 
 //<editor-fold desc="Extra">
 /**
- * 返回键值对的标签
- * 键值对标签即OkHttp中的实际tag(在Net中叫label)中的一个Map集合
+ * 读取额外信息
  */
 fun Request.extra(name: String): Any? {
     return tagOf<NetTag.Extras>()?.get(name)
 }
 
 /**
- * 全部键值对标签
+ * 全部额外信息
  */
 fun Request.extras(): HashMap<String, Any?> {
     val tags = tags()
@@ -81,7 +94,7 @@ fun Request.extras(): HashMap<String, Any?> {
 
 //<editor-fold desc="Tag">
 /**
- * 返回OkHttp的tag(通过Class区分的tag)
+ * 读取OkHttp的tag(通过Class区分的tag)
  */
 inline fun <reified T> Request.tagOf(): T? {
     return tag(T::class.java)
@@ -90,12 +103,16 @@ inline fun <reified T> Request.tagOf(): T? {
 /**
  * 设置OkHttp的tag(通过Class区分的tag)
  */
-inline fun <reified T> Request.tagOf(value: T) = apply {
-    tags()[T::class.java] = value
+inline fun <reified T> Request.tagOf(value: T?) = apply {
+    if (value == null) {
+        tags().remove(T::class.java)
+    } else {
+        tags()[T::class.java] = value
+    }
 }
 
 /**
- * 标签集合
+ * 全部tag
  */
 fun Request.tags(): MutableMap<Class<*>, Any?> {
     return OkHttpUtils.tags(this)
@@ -130,14 +147,16 @@ fun Request.downloadListeners(): ConcurrentLinkedQueue<ProgressListener> {
 
 //<editor-fold desc="Download">
 /**
- * 当指定下载目录存在同名文件是覆盖还是进行重命名, 重命名规则是: $文件名_($序号).$后缀
+ * 下载文件路径存在同名文件时是覆盖或创建新文件(添加序号)
+ * 重命名规则是: $文件名_($序号).$后缀, 例如`file_name(1).apk`
  */
 fun Request.downloadConflictRename(): Boolean {
     return tagOf<NetTag.DownloadFileConflictRename>()?.value == true
 }
 
 /**
- * 是否进行校验文件md5, 如果校验则匹配上既马上返回文件而不会进行下载
+ * 下载文件MD5校验
+ * 如果服务器响应头`Content-MD5`值和指定路径已经存在的文件MD5相同, 则跳过下载直接返回该File
  */
 fun Request.downloadMd5Verify(): Boolean {
     return tagOf<NetTag.DownloadFileMD5Verify>()?.value == true
@@ -168,8 +187,8 @@ fun Request.downloadFileNameDecode(): Boolean {
 /**
  * 下载是否使用临时文件
  * 避免下载失败后覆盖同名文件或者无法判别是否已下载完整, 仅在下载完整以后才会显示为原有文件名
- * 临时文件命名规则: 文件名 + .net-download
- *      下载文件名: install.apk, 临时文件名: install.apk.net-download
+ * 临时文件命名规则: 文件名 + .downloading
+ *      下载文件名: install.apk, 临时文件名: install.apk.downloading
  */
 fun Request.downloadTempFile(): Boolean {
     return tagOf<NetTag.DownloadTempFile>()?.value == true

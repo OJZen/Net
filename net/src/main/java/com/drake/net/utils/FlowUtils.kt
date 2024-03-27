@@ -1,17 +1,25 @@
 /*
- * Copyright (C) 2018 Drake, Inc.
+ * MIT License
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Copyright (c) 2023 劉強東 https://github.com/liangjingkanji
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 package com.drake.net.utils
@@ -28,37 +36,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.debounce
-
-/**
- * 收集Flow结果并过滤重复结果
- */
-@Deprecated("规范命名", ReplaceWith("launchIn(owner,event,dispatcher,action)"), DeprecationLevel.ERROR)
-@OptIn(InternalCoroutinesApi::class)
-inline fun <T> Flow<T>.listen(
-    owner: LifecycleOwner? = null,
-    event: Lifecycle.Event = Lifecycle.Event.ON_DESTROY,
-    dispatcher: CoroutineDispatcher = Dispatchers.Main,
-    crossinline action: suspend CoroutineScope.(value: T) -> Unit
-): AndroidScope = AndroidScope(owner, event, dispatcher).launch {
-    this@listen.collect(object : FlowCollector<T> {
-        override suspend fun emit(value: T) = action(this@launch, value)
-    })
-}
-
-/**
- * Flow直接创建作用域
- * @param owner 跟随的生命周期组件
- * @param event 销毁时机
- * @param dispatcher 指定调度器
- */
-@Deprecated("规范命名", ReplaceWith("launchIn(owner,event,dispatcher,action)"), DeprecationLevel.ERROR)
-@OptIn(InternalCoroutinesApi::class)
-inline fun <T> Flow<T>.scope(
-    owner: LifecycleOwner? = null,
-    event: Lifecycle.Event = Lifecycle.Event.ON_DESTROY,
-    dispatcher: CoroutineDispatcher = Dispatchers.Main,
-    crossinline action: suspend CoroutineScope.(value: T) -> Unit
-): AndroidScope = launchIn(owner, event, dispatcher, action)
 
 /**
  * Flow直接创建作用域

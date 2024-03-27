@@ -1,17 +1,25 @@
 /*
- * Copyright (C) 2018 Drake, Inc.
+ * MIT License
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Copyright (c) 2023 劉強東 https://github.com/liangjingkanji
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 @file:Suppress("unused", "FunctionName") @file:JvmName("NetKt")
@@ -21,11 +29,11 @@ package com.drake.net
 import android.util.Log
 import com.drake.net.interfaces.ProgressListener
 import com.drake.net.request.*
-import com.drake.net.tag.NetTag
+import okhttp3.Request
 
 object Net {
 
-    //<editor-fold desc="同步执行网络请求">
+    //<editor-fold desc="同步请求">
     /**
      * 同步网络请求
      *
@@ -187,28 +195,36 @@ object Net {
     }
     //</editor-fold>
 
-    //<editor-fold desc="取消网络请求">
+    //<editor-fold desc="取消请求">
     /**
      * 取消全部网络请求
      */
     @JvmStatic
     fun cancelAll() {
-        NetConfig.runningCalls.forEach { it.get()?.cancel() }
-        NetConfig.runningCalls.clear()
         NetConfig.okHttpClient.dispatcher.cancelAll()
+        val iterator = NetConfig.runningCalls.iterator()
+        while (iterator.hasNext()) {
+            iterator.next().get()?.cancel()
+            iterator.remove()
+        }
     }
 
     /**
      * 取消指定的网络请求, Id理论上是唯一的, 所以该函数一次只能取消一个请求
      * @return 如果成功取消返回true
+     * @see com.drake.net.request.BaseRequest.setId
      */
     @JvmStatic
     fun cancelId(id: Any?): Boolean {
         if (id == null) return false
         val iterator = NetConfig.runningCalls.iterator()
         while (iterator.hasNext()) {
-            val call = iterator.next().get() ?: continue
-            if (id == call.request().tagOf<NetTag.RequestId>()?.value) {
+            val call = iterator.next().get()
+            if (call == null) {
+                iterator.remove()
+                continue
+            }
+            if (id == call.request().id) {
                 call.cancel()
                 iterator.remove()
                 return true
@@ -220,6 +236,7 @@ object Net {
     /**
      * 根据分组取消网络请求
      * @return 如果成功取消返回true, 无论取消个数
+     * @see com.drake.net.request.BaseRequest.setGroup
      */
     @JvmStatic
     fun cancelGroup(group: Any?): Boolean {
@@ -227,9 +244,12 @@ object Net {
         val iterator = NetConfig.runningCalls.iterator()
         var hasCancel = false
         while (iterator.hasNext()) {
-            val call = iterator.next().get() ?: continue
-            val value = call.request().tagOf<NetTag.RequestGroup>()?.value
-            if (group == value) {
+            val call = iterator.next().get()
+            if (call == null) {
+                iterator.remove()
+                continue
+            }
+            if (group == call.request().group) {
                 call.cancel()
                 iterator.remove()
                 hasCancel = true
@@ -239,20 +259,19 @@ object Net {
     }
     //</editor-fold>
 
-    //<editor-fold desc="监听请求进度">
+    //<editor-fold desc="进度监听">
     /**
      * 监听正在请求的上传进度
      * @param id 请求的Id
      * @see com.drake.net.request.BaseRequest.setId
      */
     @JvmStatic
-    fun addUploadListener(id: Any, progressListener: ProgressListener) {
-        NetConfig.runningCalls.forEach {
-            val request = it.get()?.request() ?: return@forEach
-            if (request.id == id) {
-                request.uploadListeners().add(progressListener)
-            }
+    fun addUploadListener(id: Any, progressListener: ProgressListener): Boolean {
+        getRequestById(id)?.let { request ->
+            request.uploadListeners().add(progressListener)
+            return true
         }
+        return false
     }
 
     /**
@@ -261,13 +280,12 @@ object Net {
      * @see com.drake.net.request.BaseRequest.setId
      */
     @JvmStatic
-    fun removeUploadListener(id: Any, progressListener: ProgressListener) {
-        NetConfig.runningCalls.forEach {
-            val request = it.get()?.request() ?: return@forEach
-            if (request.id == id) {
-                request.uploadListeners().remove(progressListener)
-            }
+    fun removeUploadListener(id: Any, progressListener: ProgressListener): Boolean {
+        getRequestById(id)?.let { request ->
+            request.uploadListeners().remove(progressListener)
+            return true
         }
+        return false
     }
 
     /**
@@ -276,13 +294,12 @@ object Net {
      * @see com.drake.net.request.BaseRequest.setId
      */
     @JvmStatic
-    fun addDownloadListener(id: Any, progressListener: ProgressListener) {
-        NetConfig.runningCalls.forEach {
-            val request = it.get()?.request() ?: return@forEach
-            if (request.id == id) {
-                request.downloadListeners().add(progressListener)
-            }
+    fun addDownloadListener(id: Any, progressListener: ProgressListener): Boolean {
+        getRequestById(id)?.let { request ->
+            request.downloadListeners().add(progressListener)
+            return true
         }
+        return false
     }
 
     /**
@@ -292,27 +309,63 @@ object Net {
      * @see com.drake.net.request.BaseRequest.setId
      */
     @JvmStatic
-    fun removeDownloadListener(id: Any, progressListener: ProgressListener) {
-        NetConfig.runningCalls.forEach {
-            val request = it.get()?.request() ?: return@forEach
-            if (request.id == id) {
-                request.downloadListeners().remove(progressListener)
-            }
+    fun removeDownloadListener(id: Any, progressListener: ProgressListener): Boolean {
+        getRequestById(id)?.let { request ->
+            request.downloadListeners().remove(progressListener)
+            return true
         }
+        return false
     }
 
     //</editor-fold>
 
-    //<editor-fold desc="日志">
+    //<editor-fold desc="获取请求">
+
     /**
-     * 输出异常日志
-     * @see NetConfig.debug
+     * 根据ID获取请求对象
+     * @see com.drake.net.request.BaseRequest.setId
      */
-    @Deprecated("命名变更, 后续版本将被删除", ReplaceWith("Net.debug(t)"))
-    fun printStackTrace(t: Throwable) {
-        debug(t)
+    @JvmStatic
+    fun getRequestById(id: Any): Request? {
+        val iterator = NetConfig.runningCalls.iterator()
+        while (iterator.hasNext()) {
+            val call = iterator.next().get()
+            if (call == null) {
+                iterator.remove()
+                continue
+            }
+            val request = call.request()
+            if (id == request.id) {
+                return request
+            }
+        }
+        return null
     }
 
+    /**
+     * 根据Group获取请求对象
+     * @see com.drake.net.request.BaseRequest.setGroup
+     */
+    @JvmStatic
+    fun getRequestByGroup(group: Any): MutableList<Request> {
+        val requests = mutableListOf<Request>()
+        val iterator = NetConfig.runningCalls.iterator()
+        while (iterator.hasNext()) {
+            val call = iterator.next().get()
+            if (call == null) {
+                iterator.remove()
+                continue
+            }
+            val request = call.request()
+            if (group == request.group) {
+                requests.add(request)
+            }
+        }
+        return requests
+    }
+    //</editor-fold>
+
+    //<editor-fold desc="日志">
     /**
      * 输出异常日志
      * @param message 如果非[Throwable]则会自动追加代码位置(文件:行号)

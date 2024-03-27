@@ -1,19 +1,3 @@
-/*
- * Copyright (C) 2018 Drake, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.drake.net.sample.base
 
 import android.app.Application
@@ -66,7 +50,7 @@ class App : Application() {
             // 添加持久化Cookie管理
             cookieJar(PersistentCookieJar(this@App))
 
-            // 通知栏监听网络日志
+            // 仅开发模式启用通知栏监听网络日志, 该框架存在下载大文件时内存溢出崩溃请等待官方修复 https://github.com/ChuckerTeam/chucker/issues/1068
             if (BuildConfig.DEBUG) {
                 addInterceptor(
                     ChuckerInterceptor.Builder(this@App)
@@ -92,11 +76,11 @@ class App : Application() {
 
         MockDispatcher.initialize()
 
-        initializeThirdPart()
+        initializeView()
     }
 
     /** 初始化第三方依赖库库 */
-    private fun initializeThirdPart() {
+    private fun initializeView() {
 
         // 全局缺省页配置 [https://github.com/liangjingkanji/StateLayout]
         StateConfig.apply {

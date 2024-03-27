@@ -8,26 +8,34 @@ import com.drake.net.sample.constants.Api
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 
+
+/**
+ * 不要将请求结果抛来抛去, 增加代码复杂度
+ */
 class UserViewModel : ViewModel() {
 
     // 用户信息
     var userInfo: MutableLiveData<String> = MutableLiveData()
 
     /**
-     * 拉取用户信息, 会自动通知页面更新, 同时页面销毁会自动取消网络请求
-     * 其包含作用域, 生命周期跟随当前viewModel
-     * scopeNetLife/scopeDialog不推荐写在ViewModel中
+     * 使用LiveData接受请求结果, 将该liveData直接使用DataBinding绑定到页面上, 会在请求成功自动更新视图
      */
     fun fetchUserInfo() = scopeNetLife {
         userInfo.value = Get<String>(Api.GAME).await()
     }
 
-    /** 返回Deferred, 可以灵活使用, 支持并发组合 */
-    fun CoroutineScope.fetchList() = Get<String>(Api.TEST)
+    /**
+     * 开始非阻塞异步任务
+     *  返回Deferred, 调用await()才会返回结果
+     */
+    fun fetchList(scope: CoroutineScope) = scope.Get<String>(Api.TEXT)
 
-    /** 直接返回数据, 会阻塞直至数据返回 */
+    /**
+     * 开始阻塞异步任务
+     * 直接返回结果
+     */
     suspend fun fetchPrecessData() = coroutineScope {
-        val response = Get<String>(Api.TEST).await()
+        val response = Get<String>(Api.TEXT).await()
         response + "处理数据"
     }
 }

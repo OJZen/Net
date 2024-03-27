@@ -1,17 +1,25 @@
 /*
- * Copyright (C) 2018 Drake, Inc.
+ * MIT License
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Copyright (c) 2023 劉強東 https://github.com/liangjingkanji
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.drake.net.body
 
@@ -20,6 +28,7 @@ import com.drake.net.component.Progress
 import com.drake.net.interfaces.ProgressListener
 import okhttp3.MediaType
 import okhttp3.RequestBody
+import okhttp3.internal.closeQuietly
 import okio.*
 import java.io.IOException
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -30,7 +39,7 @@ class NetRequestBody(
 ) : RequestBody() {
 
     private val progress = Progress()
-    val contentLength by lazy { body.contentLength() }
+    private val contentLength by lazy { body.contentLength() }
 
     override fun contentType(): MediaType? {
         return body.contentType()
@@ -49,34 +58,35 @@ class NetRequestBody(
         } else {
             val bufferedSink: BufferedSink = sink.toProgress().buffer()
             body.writeTo(bufferedSink)
-            bufferedSink.close()
+            bufferedSink.closeQuietly()
+            if (contentLength == -1L) {
+                progressListeners?.forEach { progressListener ->
+                    progressListener.onProgress(
+                        progress.apply {
+                            finish = true
+                        }
+                    )
+                }
+            }
         }
     }
 
-    /**
-     * 复制一段指定长度的字符串内容
-     * @param byteCount 复制的字节长度, 允许超过实际长度, 如果-1则返回完整的字符串内容
-     */
-    fun peekBytes(byteCount: Long = 1024 * 1024): ByteString {
-        val buffer = Buffer()
-        body.writeTo(buffer)
-        val maxSize = if (byteCount < 0) buffer.size else minOf(buffer.size, byteCount)
-        return buffer.readByteString(maxSize)
-    }
-
     private fun Sink.toProgress() = object : ForwardingSink(this) {
-        var writeByteCount = 0L
+        private var writeByteCount = 0L
 
         @Throws(IOException::class)
         override fun write(source: Buffer, byteCount: Long) {
             super.write(source, byteCount)
-            writeByteCount += byteCount
-            if (progressListeners != null) {
+            if (!progressListeners.isNullOrEmpty()) {
+                writeByteCount += byteCount
                 val currentElapsedTime = SystemClock.elapsedRealtime()
                 progressListeners.forEach { progressListener ->
                     progressListener.intervalByteCount += byteCount
                     val currentInterval = currentElapsedTime - progressListener.elapsedTime
-                    if (currentInterval >= progressListener.interval || writeByteCount == contentLength) {
+                    if (!progress.finish && (writeByteCount == contentLength || currentInterval >= progressListener.interval)) {
+                        if (writeByteCount == contentLength) {
+                            progress.finish = true
+                        }
                         progressListener.onProgress(
                             progress.apply {
                                 currentByteCount = writeByteCount

@@ -1,3 +1,33 @@
+## 3.6.4
+- feat: 优化转换器ConvertException错误信息
+
+## 3.6.3
+- fix: #205 删除MultiPart上传RequestBody默认添加filename
+
+## 3.6.2
+- fix: #203 适配AGPv8的代码混淆Gson无法获取泛型问题
+
+## 3.6.1
+- fix: #197 修复scopeDialog的可取消对话框默认值
+
+## 3.6.0
+- pref: Optimize code
+- feat: contentLength未知的上传对象finish也有效
+- pref: RunningCalls遍历优化
+- pref: 考虑到Uri.toRequestBody读取不到文件或长度
+- refactor: 删除废弃函数
+- refactor: 下载临时文件名后缀改成.downloading
+- refactor: 删除param(RequestBody, Header)
+- refactor: LogRecordInterceptor.kt
+- refactor: 删除有问题的取消请求函数
+- refactor: peekBytes的默认读取大小统一为1MB
+- fix: 修复获取请求对象获取ID/Group错误
+- fix: 全局取消请求时发生ConvertException错误提示
+- fix: #187 上传进度监听finish字段无效
+
+## 3.5.9
+- fix: 修复Java基础类型泛型解析
+
 ## 3.5.8
 - fix: 删除权限 ACCESS_NETWORK_STATE, 解决个别机型重复申请问题
 - upgrade: BRV 1.4.0
@@ -223,7 +253,7 @@
 - 修复未知的TypeToken访问权限问题
 
 ## 3.0.6
-- 所有Json解析框架都可以解析`List<UserModel>`等嵌套泛型数据结构: [特殊结构解析](convert-special.md)
+- 所有Json解析框架都可以解析`List<UserModel>`等嵌套泛型数据结构
 
 ## 3.0.5
 - 修复Path编码问题
